@@ -2,7 +2,7 @@ name: CS2 Patch Notes FR
 
 on:
   schedule:
-    - cron: "0 * * * *"   # toutes les heures
+    - cron: "*/15 * * * *"   # toutes les 15 minutes
   workflow_dispatch: {}    # exécution manuelle possible
 
 jobs:
