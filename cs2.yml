@@ -1,0 +1,37 @@
+name: CS2 Patch Notes FR
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # toutes les heures
+  workflow_dispatch: {}    # exécution manuelle possible
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          pip install requests beautifulsoup4 lxml
+
+      - name: Run script
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python main.py
+
+      - name: Save state (last_sent.txt)
+        run: |
+          if [ -f last_sent.txt ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add last_sent.txt
+            git commit -m "Update last_sent.txt" || echo "No changes"
+            git push || echo "No push (fork or no permission)"
+          fi
