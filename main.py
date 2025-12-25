@@ -1,9 +1,14 @@
 import os
 import time
 import requests
+import hashlib
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
+def get_link_id(item):
+    """Génère un identifiant unique basé sur le contenu du patch."""
+    contenu = item["summary"].strip()
+    return hashlib.md5(contenu.encode("utf-8")).hexdigest()
 # URL officielle des patch notes en français
 BASE_URL = "https://www.counter-strike.net/news/updates?l=french"
 
@@ -94,9 +99,10 @@ def main():
         print("Aucune mise à jour récupérée.")
         return
 
-    link_id = item["title"]
+    link_id = get_link_id(item)  # ← identifiant stable basé sur le contenu
+
     if already_sent(link_id):
-        print("Mise à jour déjà envoyée, on ignore.")
+        print("⏩ Patch déjà envoyé, on ignore.")
         return
 
     send_to_discord(item)
