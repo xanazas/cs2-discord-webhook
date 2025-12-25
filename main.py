@@ -20,7 +20,7 @@ def fetch_latest_update():
     for attempt in range(3):
         try:
             print(f"[Tentative {attempt + 1}] Récupération des patch notes...")
-            r = requests.get(BASE_URL, headers=headers, timeout=20)
+            r = requests.get(BASE_URL, headers=headers, timeout=60)
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "lxml")
 
