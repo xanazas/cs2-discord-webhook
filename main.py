@@ -8,15 +8,11 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 
 # === Constantes globales ===
 
-# URL officielle des patch notes de CS2 en français
 BASE_URL = "https://www.counter-strike.net/news/updates?l=french"
-
-# Webhook Discord à définir dans les secrets GitHub
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 if not WEBHOOK_URL:
     raise RuntimeError("Le secret DISCORD_WEBHOOK_URL est manquant.")
 
-# Fichier local pour mémoriser le dernier patch envoyé
 STATE_FILE = "last_sent.txt"
 
 
@@ -41,7 +37,6 @@ class PatchFetcher:
             try:
                 print(f"[Tentative {attempt + 1}] Chargement de la page avec Playwright...")
 
-                # Lancement de Playwright en mode headless
                 with sync_playwright() as p:
                     browser = p.chromium.launch(headless=True)
                     page = browser.new_page()
@@ -50,21 +45,18 @@ class PatchFetcher:
                     html = page.content()
                     browser.close()
 
-                # Analyse HTML avec BeautifulSoup
                 soup = BeautifulSoup(html, "lxml")
                 articles = soup.find_all("div", class_="-EouvmnKRMabN5fJonx-O")
                 if not articles:
                     print("Aucun article trouvé.")
                     return None
 
-                # On prend le premier article (le plus récent)
                 article = articles[0]
                 sub_divs = article.find_all("div", recursive=False)
                 if len(sub_divs) < 3:
                     print("Structure inattendue dans l'article.")
                     return None
 
-                # Extraction des données
                 date = sub_divs[0].get_text(strip=True)
                 content_div = sub_divs[2]
                 title_tag = content_div.find("p")
@@ -72,7 +64,6 @@ class PatchFetcher:
 
                 bullet_points = content_div.find_all("li")
                 summary = "\n".join(f"- {li.get_text(strip=True)}" for li in bullet_points)
-            
 
                 return PatchNote(title=f"{title} ({date})", summary=summary, link=BASE_URL)
 
@@ -112,36 +103,36 @@ class DiscordNotifier:
         self.webhook_url = webhook_url
 
     def send(self, patch: PatchNote):
-    """Construit et envoie un message Discord avec le contenu du patch."""
-    
-    # Séparer le titre et la date si possible
-    if "(" in patch.title and patch.title.endswith(")"):
-        titre, date = patch.title.rsplit("(", 1)
-        titre = titre.strip()
-        date = date.strip(")")
-    else:
-        titre = patch.title
-        date = ""
+        """Construit et envoie un message Discord avec le contenu du patch."""
 
-    # Mise en forme Markdown pour Discord
-    description = f"""📅 {date}
+        # Séparer le titre et la date si possible
+        if "(" in patch.title and patch.title.endswith(")"):
+            titre, date = patch.title.rsplit("(", 1)
+            titre = titre.strip()
+            date = date.strip(")")
+        else:
+            titre = patch.title
+            date = ""
+
+        # Mise en forme Markdown pour Discord
+        description = f"""📅 {date}
 
 📝 **{titre}**
 
-{patch.summary}""" 
+{patch.summary}"""
 
-    payload = {
-        "embeds": [{
-            "title": "📰 Nouvelle actualité CS2 !",
-            "url": patch.link,
-            "description": description[:1000],  # Discord limite à 1024 caractères
-            "color": 0x58A6FF
-        }]
-    }
+        payload = {
+            "embeds": [{
+                "title": "📰 Nouvelle actualité CS2 !",
+                "url": patch.link,
+                "description": description[:1000],  # Discord limite à 1024 caractères
+                "color": 0x58A6FF
+            }]
+        }
 
-    print(f"📢 Envoi de l’actualité CS2 sur Discord : {patch.title}")
-    resp = requests.post(self.webhook_url, json=payload, timeout=20)
-    resp.raise_for_status()
+        print(f"📢 Envoi de l’actualité CS2 sur Discord : {patch.title}")
+        resp = requests.post(self.webhook_url, json=payload, timeout=20)
+        resp.raise_for_status()
 
 
 # === Classe principale qui orchestre tout ===
