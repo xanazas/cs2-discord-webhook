@@ -4,7 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 
 # URL officielle des patch notes Counter-Strike en français
-BASE_URL = "https://www.counter-strike.net/news/updates?l=french"
+BASE_URL = "https://www.counter-strike.net/news/updates"
 
 # Récupération de l'URL du webhook depuis le secret GitHub
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
