@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from bs4 import BeautifulSoup
 
@@ -14,29 +15,37 @@ if not WEBHOOK_URL:
 STATE_FILE = "last_sent.txt"
 
 def fetch_latest_update():
-    """Récupère la dernière mise à jour depuis le site officiel."""
-    r = requests.get(BASE_URL, timeout=20)
-    r.raise_for_status()
-    soup = BeautifulSoup(r.text, "lxml")
+    """Récupère la dernière mise à jour depuis le site officiel avec retry."""
+    headers = {"User-Agent": "Mozilla/5.0"}
+    for attempt in range(3):
+        try:
+            print(f"[Tentative {attempt + 1}] Récupération des patch notes...")
+            r = requests.get(BASE_URL, headers=headers, timeout=20)
+            r.raise_for_status()
+            soup = BeautifulSoup(r.text, "lxml")
 
-    # Sélection du premier article
-    article = soup.select_one("a.article") or soup.select_one("div.newsPost")
-    if not article:
-        return None
+            article = soup.select_one("a.article") or soup.select_one("div.newsPost")
+            if not article:
+                print("Aucun article trouvé sur la page.")
+                return None
 
-    # Titre
-    title_el = article.select_one(".headline, .articleTitle")
-    title = title_el.get_text(strip=True) if title_el else "Mise à jour Counter-Strike"
+            title_el = article.select_one(".headline, .articleTitle")
+            title = title_el.get_text(strip=True) if title_el else "Mise à jour Counter-Strike"
 
-    # Lien
-    link_el = article if article.name == "a" else article.select_one("a")
-    link = link_el.get("href") if link_el and link_el.has_attr("href") else BASE_URL
+            link_el = article if article.name == "a" else article.select_one("a")
+            link = link_el.get("href") if link_el and link_el.has_attr("href") else BASE_URL
 
-    # Résumé
-    summary_el = article.select_one(".articleSubText, .subText, .body")
-    summary = summary_el.get_text(strip=True) if summary_el else ""
+            summary_el = article.select_one(".articleSubText, .subText, .body")
+            summary = summary_el.get_text(strip=True) if summary_el else ""
 
-    return {"title": title, "link": link, "summary": summary}
+            return {"title": title, "link": link, "summary": summary}
+
+        except requests.exceptions.RequestException as e:
+            print(f"Erreur lors de la tentative {attempt + 1}: {e}")
+            time.sleep(5)
+
+    print("Toutes les tentatives ont échoué.")
+    return None
 
 def already_sent(link_id):
     """Vérifie si la mise à jour a déjà été envoyée."""
@@ -61,23 +70,24 @@ def send_to_discord(item):
             "color": 5814783
         }]
     }
+    print(f"Envoi du patch note sur Discord : {item['title']} ({item['link']})")
     resp = requests.post(WEBHOOK_URL, json=payload, timeout=20)
     resp.raise_for_status()
 
 def main():
     item = fetch_latest_update()
     if not item:
-        print("Aucun article trouvé.")
+        print("Aucune mise à jour récupérée.")
         return
 
     link_id = item["link"]
     if already_sent(link_id):
-        print("Déjà envoyé, on ignore.")
+        print("Mise à jour déjà envoyée, on ignore.")
         return
 
     send_to_discord(item)
     mark_sent(link_id)
-    print("Patch note envoyé sur Discord.")
+    print("✅ Patch note envoyé avec succès sur Discord.")
 
 if __name__ == "__main__":
     main()
