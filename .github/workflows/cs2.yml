@@ -3,11 +3,12 @@ name: CS2 Patch Notes FR
 on:
   schedule:
     - cron: "*/15 * * * *"   # toutes les 15 minutes
-  workflow_dispatch: {}    # exécution manuelle possible
+  workflow_dispatch: {}      # exécution manuelle possible
 
 jobs:
   run:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -17,16 +18,18 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Installer les dépendances Python + Playwright
         run: |
-          pip install requests beautifulsoup4 lxml
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 lxml playwright
+          python -m playwright install --with-deps
 
-      - name: Run script
+      - name: Exécuter le script principal
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python main.py
 
-      - name: Save state (last_sent.txt)
+      - name: Sauvegarder l’état (last_sent.txt)
         run: |
           if [ -f last_sent.txt ]; then
             git config user.name "github-actions[bot]"
