@@ -24,21 +24,29 @@ def fetch_latest_update():
             r.raise_for_status()
             soup = BeautifulSoup(r.text, "lxml")
 
-            article = soup.select_one("a.article") or soup.select_one("div.newsPost")
-            if not article:
-                print("Aucun article trouvé sur la page.")
+            # Trouver tous les blocs d'article
+            articles = soup.find_all("div", class_="-EouvmnKRMabN5fJonx-O")
+            if not articles:
+                print("Aucun article trouvé.")
                 return None
 
-            title_el = article.select_one(".headline, .articleTitle")
-            title = title_el.get_text(strip=True) if title_el else "Mise à jour Counter-Strike"
+            article = articles[0]  # Le plus récent
 
-            link_el = article if article.name == "a" else article.select_one("a")
-            link = link_el.get("href") if link_el and link_el.has_attr("href") else BASE_URL
+            # Récupérer les 3 sous-divs (date, titre, contenu)
+            sub_divs = article.find_all("div", recursive=False)
+            if len(sub_divs) < 3:
+                print("Structure inattendue dans l'article.")
+                return None
 
-            summary_el = article.select_one(".articleSubText, .subText, .body")
-            summary = summary_el.get_text(strip=True) if summary_el else ""
+            date = sub_divs[0].get_text(strip=True)
+            title = sub_divs[1].get_text(strip=True)
+            summary = sub_divs[2].get_text(strip=True)
 
-            return {"title": title, "link": link, "summary": summary}
+            return {
+                "title": f"{title} ({date})",
+                "link": BASE_URL,
+                "summary": summary
+            }
 
         except requests.exceptions.RequestException as e:
             print(f"Erreur lors de la tentative {attempt + 1}: {e}")
@@ -80,7 +88,7 @@ def main():
         print("Aucune mise à jour récupérée.")
         return
 
-    link_id = item["link"]
+    link_id = item["title"]  # Utilise le titre comme identifiant unique
     if already_sent(link_id):
         print("Mise à jour déjà envoyée, on ignore.")
         return
