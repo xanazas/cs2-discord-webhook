@@ -24,7 +24,7 @@ def fetch_latest_update():
                 browser = p.chromium.launch(headless=True)
                 page = browser.new_page()
                 page.goto(BASE_URL, timeout=90000)  # 90 secondes max pour charger
-                page.wait_for_selector("div[class^='PatchNotes']", timeout=30000)  # attend que le contenu s'affiche
+                page.wait_for_selector("div[id='csgo_react_root'] >> div", timeout=30000) # attend que le contenu s'affiche
                 html = page.content()
                 browser.close()
 
