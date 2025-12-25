@@ -10,22 +10,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 📁 Étape 1 : Cloner le dépôt
       - name: Cloner le dépôt
         uses: actions/checkout@v4
 
-      # 🐍 Étape 2 : Installer Python
       - name: Configurer Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # 📦 Étape 3 : Installer les dépendances Python
       - name: Installer les dépendances
         run: |
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 lxml playwright
           playwright install chromium
 
-      # 💾 Étape 4 : Restaurer le cache contenant last_sent.txt
-      - name: Restaur
+      # ✅ Étape unique : restaurer ET mettre à jour le cache avec une clé dynamique
+      - name: Gérer le cache du dernier patch
+        uses: actions/cache@v4
+        with:
+          path: last_sent.txt
+          key: cs2-patch-cache-${{ github.run_id }}
+          restore-keys: |
+            cs2-patch-cache-
+
+      - name: Exécuter le script Python
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python main.py
