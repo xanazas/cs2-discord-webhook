@@ -1,18 +1,17 @@
+# === Importation des bibliothèques nécessaires ===
 import os
 import time
-import requests
 import hashlib
+import requests
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
-def get_link_id(item):
-    """Génère un identifiant unique basé sur le contenu du patch."""
-    contenu = item["summary"].strip()
-    return hashlib.md5(contenu.encode("utf-8")).hexdigest()
-# URL officielle des patch notes en français
+# === Constantes globales ===
+
+# URL officielle des patch notes de CS2 en français
 BASE_URL = "https://www.counter-strike.net/news/updates?l=french"
 
-# Webhook Discord (à définir dans les secrets GitHub)
+# Webhook Discord à définir dans les secrets GitHub
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK_URL")
 if not WEBHOOK_URL:
     raise RuntimeError("Le secret DISCORD_WEBHOOK_URL est manquant.")
@@ -20,94 +19,134 @@ if not WEBHOOK_URL:
 # Fichier local pour mémoriser le dernier patch envoyé
 STATE_FILE = "last_sent.txt"
 
-def fetch_latest_update():
-    """Charge la page avec Playwright et extrait le dernier patch note."""
-    for attempt in range(3):
-        try:
-            print(f"[Tentative {attempt + 1}] Chargement de la page avec Playwright...")
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-                page.goto(BASE_URL, timeout=90000)  # 90 secondes max pour charger
-                page.wait_for_selector("div[id='csgo_react_root'] >> div", timeout=30000) # attend que le contenu s'affiche
-                html = page.content()
-                browser.close()
 
-            soup = BeautifulSoup(html, "lxml")
+# === Classe représentant un patch note ===
+class PatchNote:
+    def __init__(self, title: str, summary: str, link: str):
+        self.title = title
+        self.summary = summary
+        self.link = link
 
-            # Recherche des blocs d'articles
-            articles = soup.find_all("div", class_="-EouvmnKRMabN5fJonx-O")
-            if not articles:
-                print("Aucun article trouvé.")
-                return None
+    def get_id(self) -> str:
+        """Génère un identifiant unique basé sur le contenu du patch (hash MD5)."""
+        contenu = self.summary.strip()
+        return hashlib.md5(contenu.encode("utf-8")).hexdigest()
 
-            article = articles[0]  # On prend le plus récent
-            sub_divs = article.find_all("div", recursive=False)
-            if len(sub_divs) < 3:
-                print("Structure inattendue dans l'article.")
-                return None
 
-            date = sub_divs[0].get_text(strip=True)
-            title = sub_divs[1].get_text(strip=True)
-            summary = sub_divs[2].get_text(strip=True)
+# === Classe responsable de récupérer le dernier patch depuis le site officiel ===
+class PatchFetcher:
+    def fetch_latest(self) -> PatchNote | None:
+        """Tente de récupérer le patch note le plus récent (3 essais max)."""
+        for attempt in range(3):
+            try:
+                print(f"[Tentative {attempt + 1}] Chargement de la page avec Playwright...")
 
-            return {
-                "title": f"{title} ({date})",
-                "link": BASE_URL,
-                "summary": summary
-            }
+                # Lancement de Playwright en mode headless
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(headless=True)
+                    page = browser.new_page()
+                    page.goto(BASE_URL, timeout=90000)
+                    page.wait_for_selector("div[id='csgo_react_root'] >> div", timeout=30000)
+                    html = page.content()
+                    browser.close()
 
-        except PlaywrightTimeout:
-            print(f"⏱️ Timeout lors de la tentative {attempt + 1}. Nouvelle tentative...")
-            time.sleep(5)
-        except Exception as e:
-            print(f"❌ Erreur lors de la tentative {attempt + 1} : {e}")
-            time.sleep(5)
+                # Analyse HTML avec BeautifulSoup
+                soup = BeautifulSoup(html, "lxml")
+                articles = soup.find_all("div", class_="-EouvmnKRMabN5fJonx-O")
+                if not articles:
+                    print("Aucun article trouvé.")
+                    return None
 
-    print("Toutes les tentatives ont échoué.")
-    return None
+                # On prend le premier article (le plus récent)
+                article = articles[0]
+                sub_divs = article.find_all("div", recursive=False)
+                if len(sub_divs) < 3:
+                    print("Structure inattendue dans l'article.")
+                    return None
 
-def already_sent(link_id):
-    """Vérifie si le patch a déjà été envoyé."""
-    if not os.path.exists(STATE_FILE):
-        return False
-    with open(STATE_FILE, "r", encoding="utf-8") as f:
-        return f.read().strip() == link_id
+                # Extraction des données
+                date = sub_divs[0].get_text(strip=True)
+                title = sub_divs[1].get_text(strip=True)
+                summary = sub_divs[2].get_text(strip=True)
 
-def mark_sent(link_id):
-    """Enregistre l'identifiant du dernier patch envoyé."""
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
-        f.write(link_id)
+                return PatchNote(title=f"{title} ({date})", summary=summary, link=BASE_URL)
 
-def send_to_discord(item):
-    """Envoie le patch note sur Discord via webhook."""
-    payload = {
-        "embeds": [{
-            "title": item["title"],
-            "url": item["link"],
-            "description": item["summary"][:1000],  # Discord limite à 1024 caractères
-            "color": 5814783
-        }]
-    }
-    print(f"📢 Envoi du patch note sur Discord : {item['title']}")
-    resp = requests.post(WEBHOOK_URL, json=payload, timeout=20)
-    resp.raise_for_status()
+            except PlaywrightTimeout:
+                print(f"⏱️ Timeout lors de la tentative {attempt + 1}. Nouvelle tentative...")
+                time.sleep(5)
+            except Exception as e:
+                print(f"❌ Erreur lors de la tentative {attempt + 1} : {e}")
+                time.sleep(5)
 
-def main():
-    item = fetch_latest_update()
-    if not item:
-        print("Aucune mise à jour récupérée.")
-        return
+        print("Toutes les tentatives ont échoué.")
+        return None
 
-    link_id = get_link_id(item)  # ← identifiant stable basé sur le contenu
 
-    if already_sent(link_id):
-        print("⏩ Patch déjà envoyé, on ignore.")
-        return
+# === Classe pour gérer l'état local du dernier patch envoyé ===
+class PatchState:
+    def __init__(self, filepath: str = STATE_FILE):
+        self.filepath = filepath
 
-    send_to_discord(item)
-    mark_sent(link_id)
-    print("✅ Patch note envoyé avec succès.")
+    def already_sent(self, patch_id: str) -> bool:
+        """Vérifie si ce patch a déjà été envoyé (en comparant l'ID avec le fichier local)."""
+        if not os.path.exists(self.filepath):
+            return False
+        with open(self.filepath, "r", encoding="utf-8") as f:
+            return f.read().strip() == patch_id
 
+    def mark_sent(self, patch_id: str):
+        """Enregistre l'ID du patch dans le fichier local."""
+        print(f"💾 Enregistrement de l'ID dans {self.filepath}")
+        with open(self.filepath, "w", encoding="utf-8") as f:
+            f.write(patch_id)
+
+
+# === Classe pour envoyer le patch sur Discord ===
+class DiscordNotifier:
+    def __init__(self, webhook_url: str):
+        self.webhook_url = webhook_url
+
+    def send(self, patch: PatchNote):
+        """Construit et envoie un message Discord avec le contenu du patch."""
+        payload = {
+            "embeds": [{
+                "title": patch.title,
+                "url": patch.link,
+                "description": patch.summary[:1000],  # Discord limite à 1024 caractères
+                "color": 0x58A6FF  # Couleur bleue
+            }]
+        }
+        print(f"📢 Envoi du patch note sur Discord : {patch.title}")
+        resp = requests.post(self.webhook_url, json=payload, timeout=20)
+        resp.raise_for_status()
+
+
+# === Classe principale qui orchestre tout ===
+class PatchBot:
+    def __init__(self):
+        self.fetcher = PatchFetcher()
+        self.state = PatchState()
+        self.notifier = DiscordNotifier(WEBHOOK_URL)
+
+    def run(self):
+        """Exécute le processus complet : récupération, vérification, envoi, enregistrement."""
+        patch = self.fetcher.fetch_latest()
+        if not patch:
+            print("Aucune mise à jour récupérée.")
+            return
+
+        patch_id = patch.get_id()
+        print(f"🧠 ID du patch : {patch_id}")
+
+        if self.state.already_sent(patch_id):
+            print("⏩ Patch déjà envoyé, on ignore.")
+            return
+
+        self.notifier.send(patch)
+        self.state.mark_sent(patch_id)
+        print("✅ Patch note envoyé et enregistré.")
+
+
+# === Point d'entrée du script ===
 if __name__ == "__main__":
-    main()
+    PatchBot().run()
