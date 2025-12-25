@@ -66,8 +66,13 @@ class PatchFetcher:
 
                 # Extraction des données
                 date = sub_divs[0].get_text(strip=True)
-                title = sub_divs[1].get_text(strip=True)
-                summary = sub_divs[2].get_text(strip=True)
+                content_div = sub_divs[2]
+                title_tag = content_div.find("p")
+                title = title_tag.get_text(strip=True) if title_tag else "Titre inconnu"
+
+                bullet_points = content_div.find_all("li")
+                summary = "\n".join(f"- {li.get_text(strip=True)}" for li in bullet_points)
+            
 
                 return PatchNote(title=f"{title} ({date})", summary=summary, link=BASE_URL)
 
@@ -107,18 +112,36 @@ class DiscordNotifier:
         self.webhook_url = webhook_url
 
     def send(self, patch: PatchNote):
-        """Construit et envoie un message Discord avec le contenu du patch."""
-        payload = {
-            "embeds": [{
-                "title": patch.title,
-                "url": patch.link,
-                "description": patch.summary[:1000],  # Discord limite à 1024 caractères
-                "color": 0x58A6FF  # Couleur bleue
-            }]
-        }
-        print(f"📢 Envoi du patch note sur Discord : {patch.title}")
-        resp = requests.post(self.webhook_url, json=payload, timeout=20)
-        resp.raise_for_status()
+    """Construit et envoie un message Discord avec le contenu du patch."""
+    
+    # Séparer le titre et la date si possible
+    if "(" in patch.title and patch.title.endswith(")"):
+        titre, date = patch.title.rsplit("(", 1)
+        titre = titre.strip()
+        date = date.strip(")")
+    else:
+        titre = patch.title
+        date = ""
+
+    # Mise en forme Markdown pour Discord
+    description = f"""📅 {date}
+
+📝 **{titre}**
+
+{patch.summary}""" 
+
+    payload = {
+        "embeds": [{
+            "title": "📰 Nouvelle actualité CS2 !",
+            "url": patch.link,
+            "description": description[:1000],  # Discord limite à 1024 caractères
+            "color": 0x58A6FF
+        }]
+    }
+
+    print(f"📢 Envoi de l’actualité CS2 sur Discord : {patch.title}")
+    resp = requests.post(self.webhook_url, json=payload, timeout=20)
+    resp.raise_for_status()
 
 
 # === Classe principale qui orchestre tout ===
