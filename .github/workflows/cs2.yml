@@ -2,8 +2,8 @@ name: CS2 Patch Notes FR
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # toutes les 15 minutes
-  workflow_dispatch: {}      # exécution manuelle possible
+    - cron: "*/8 * * * *"   # Toutes les 8 minutes
+  workflow_dispatch: {}     # Exécution manuelle possible
 
 jobs:
   send-patch:
@@ -24,7 +24,7 @@ jobs:
           pip install requests beautifulsoup4 lxml playwright
           playwright install chromium
 
-      # ✅ Étape unique : restaurer ET mettre à jour le cache avec une clé dynamique
+      # Restaurer et mettre à jour le cache avec une clé dynamique
       - name: Gérer le cache du dernier patch
         uses: actions/cache@v4
         with:
