@@ -9,6 +9,10 @@ jobs:
   run:
     runs-on: ubuntu-latest
 
+    # Injection du secret pour tout le job
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,14 +22,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-Linux
+          key: playwright-${{ runner.os }}
 
-      # Cache last_sent.txt (RESTORE)
+      # Restore last_sent.txt (clé dynamique + restore-keys)
       - name: Restore last_sent cache
         uses: actions/cache@v4
         with:
           path: last_sent.txt
-          key: last-sent-cache
+          key: last-sent-${{ github.run_id }}
+          restore-keys: |
+            last-sent-
 
       - name: Install Python
         uses: actions/setup-python@v5
@@ -40,9 +46,10 @@ jobs:
       - name: Run bot
         run: python main.py
 
-      # Cache last_sent.txt (SAVE)
+      # Save last_sent.txt (clé dynamique)
       - name: Save last_sent cache
+        if: always()
         uses: actions/cache@v4
         with:
           path: last_sent.txt
-          key: last-sent-cache
+          key: last-sent-${{ github.run_id }}
