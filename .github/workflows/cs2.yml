@@ -1,54 +1,48 @@
-name: CS2 Patch Notes FR
+name: send-patch
 
 on:
   schedule:
-    - cron: "*/8 * * * *"   # Toutes les 8 minutes
-  workflow_dispatch: {}     # Exécution manuelle possible
+    - cron: "*/8 * * * *"
+  workflow_dispatch:
 
 jobs:
-  send-patch:
+  run:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Cloner le dépôt
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configurer Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      # Cache Playwright pour accélérer les runs
+      # Cache Playwright
       - name: Cache Playwright
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}
+          key: playwright-Linux
 
-      - name: Installer les dépendances
+      # Cache last_sent.txt (RESTORE)
+      - name: Restore last_sent cache
+        uses: actions/cache@v4
+        with:
+          path: last_sent.txt
+          key: last-sent-cache
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 lxml playwright
+          pip install -r requirements.txt
           playwright install chromium
 
-      # Cache stable pour last_sent.txt
-      - name: Restaurer le cache du dernier patch
-        uses: actions/cache@v4
-        with:
-          path: last_sent.txt
-          key: cs2-patch-cache-v1
-          restore-keys: |
-            cs2-patch-cache-
-
-      - name: Exécuter le script Python
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      - name: Run bot
         run: python main.py
 
-      # Mise à jour du cache après exécution
-      - name: Mettre à jour le cache du dernier patch
-        if: always()
+      # Cache last_sent.txt (SAVE)
+      - name: Save last_sent cache
         uses: actions/cache@v4
         with:
           path: last_sent.txt
-          key: cs2-patch-cache-v1
+          key: last-sent-cache
