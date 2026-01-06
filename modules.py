@@ -66,16 +66,21 @@ class NotifDiscord:
 📝 **{titre}**
 
 {article.resume}"""
+        titre_embed = (
+    "📰 Nouvelle mise à jour CS2 !" 
+    if article.categorie == "mise_a_jour" 
+    else "📰 Nouvelle actualité CS2 !"
+)
 
         payload = {
             "embeds": [{
-                "title": "📰 Nouvelle mise à jour CS2 !",
+                "title": titre_embed,
                 "url": article.lien,
                 "description": description[:1024],
                 "color": 0x58A6FF
             }]
         }
-
+        
         print(f"📢 Envoi Discord : {article.titre}")
         resp = requests.post(self.webhook_url, json=payload, timeout=20)
 
@@ -178,7 +183,7 @@ class RecuperateurCS2:
                 soup = BeautifulSoup(html, "lxml")
 
                 if categorie == "mise_a_jour":
-                    return self.recuperer_mise_a_jour(soup)
+                    return ArticleCS2( f"{titre} ({date})", resume, "https://www.counter-strike.net/news/updates?l=french", "mise_a_jour" )
 
                 if categorie == "actualite":
                     return self.recuperer_actualite(soup)
