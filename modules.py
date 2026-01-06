@@ -15,6 +15,37 @@ from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
 
 
+# === Fonction utilitaire : traduction des dates anglaises ===
+def traduire_date_anglaise(date_en):
+    """Convertit une date anglaise du type 'December 18, 2025' en '18 décembre 2025'."""
+    mois = {
+        "January": "janvier",
+        "February": "février",
+        "March": "mars",
+        "April": "avril",
+        "May": "mai",
+        "June": "juin",
+        "July": "juillet",
+        "August": "août",
+        "September": "septembre",
+        "October": "octobre",
+        "November": "novembre",
+        "December": "décembre"
+    }
+
+    try:
+        # Exemple : "December 18, 2025"
+        parts = date_en.replace(",", "").split(" ")
+        mois_en = parts[0]
+        jour = parts[1]
+        annee = parts[2]
+
+        mois_fr = mois.get(mois_en, mois_en)
+        return f"{jour} {mois_fr} {annee}"
+    except:
+        return date_en  # fallback si format inattendu
+
+
 # === Modèle de données ===
 class ArticleCS2:
     """Représente un article CS2 (mise à jour ou actualité)."""
@@ -140,7 +171,8 @@ class RecuperateurCS2:
 
         # --- Extraction de la date ---
         date_tag = article.find("div")
-        date = date_tag.get_text(strip=True) if date_tag else "Date inconnue"
+        date_raw = date_tag.get_text(strip=True) if date_tag else "Date inconnue"
+        date = traduire_date_anglaise(date_raw)
 
         # --- Extraction du résumé ---
         bullet_points = article.find_all("li")
@@ -165,7 +197,9 @@ class RecuperateurCS2:
 
         bloc = article.find("div", class_="_2P4kNfcV-LQM4dxZG64G2y")
 
-        date = bloc.find("div", class_="_3kp_OxASIUMKf6oh0nhkFd").get_text(strip=True)
+        date_raw = bloc.find("div", class_="_3kp_OxASIUMKf6oh0nhkFd").get_text(strip=True)
+        date = traduire_date_anglaise(date_raw)
+
         titre = bloc.find("div", class_="_39UGsnaF9LNfYmJDUwUkdr").get_text(strip=True)
         resume = bloc.find("div", class_="_471NMqUJJK-cwlZPr1323").get_text(strip=True)
 
