@@ -18,18 +18,25 @@ jobs:
         with:
           python-version: '3.11'
 
+      # Cache Playwright pour accélérer les runs
+      - name: Cache Playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}
+
       - name: Installer les dépendances
         run: |
           python -m pip install --upgrade pip
           pip install requests beautifulsoup4 lxml playwright
           playwright install chromium
 
-      # Restaurer et mettre à jour le cache avec une clé dynamique
-      - name: Gérer le cache du dernier patch
+      # Cache stable pour last_sent.txt
+      - name: Restaurer le cache du dernier patch
         uses: actions/cache@v4
         with:
           path: last_sent.txt
-          key: cs2-patch-cache-${{ github.run_id }}
+          key: cs2-patch-cache-v1
           restore-keys: |
             cs2-patch-cache-
 
@@ -37,3 +44,11 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python main.py
+
+      # Mise à jour du cache après exécution
+      - name: Mettre à jour le cache du dernier patch
+        if: always()
+        uses: actions/cache@v4
+        with:
+          path: last_sent.txt
+          key: cs2-patch-cache-v1
