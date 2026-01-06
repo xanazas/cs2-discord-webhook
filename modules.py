@@ -34,7 +34,6 @@ def traduire_date_anglaise(date_en):
     }
 
     try:
-        # Exemple : "December 18, 2025"
         parts = date_en.replace(",", "").split(" ")
         mois_en = parts[0]
         jour = parts[1]
@@ -57,8 +56,16 @@ class ArticleCS2:
         self.categorie = categorie
 
     def get_id(self) -> str:
-        """Génère un identifiant unique basé sur le contenu."""
-        contenu = (self.titre + self.resume + self.categorie).strip()
+        """
+        Génère un identifiant unique basé sur :
+        - le titre SANS la date
+        - le résumé
+        - la catégorie
+
+        Cela évite les reposts si la date change de format (ex: anglais → français).
+        """
+        titre_sans_date = self.titre.split("(")[0].strip()
+        contenu = (titre_sans_date + self.resume + self.categorie).strip()
         return hashlib.md5(contenu.encode("utf-8")).hexdigest()
 
 
@@ -88,14 +95,12 @@ class NotifDiscord:
         self.webhook_url = webhook_url
 
     def envoyer(self, article: ArticleCS2):
-        # Titre dynamique selon la catégorie
         titre_embed = (
             "📰 Nouvelle mise à jour CS2 !" 
             if article.categorie == "mise_a_jour" 
             else "📰 Nouvelle actualité CS2 !"
         )
 
-        # Extraction du titre + date
         titre, date = article.titre.rsplit("(", 1)
         titre = titre.strip()
         date = date.strip(")")
@@ -128,10 +133,7 @@ class NotifDiscord:
 class RecuperateurCS2:
     """Récupère les mises à jour et actualités CS2 via Playwright."""
 
-    # Classe React utilisée pour les mises à jour (patch notes)
     CLASSE_PATCH = "-EouvmnKRMabN5fJonx-O"
-
-    # Classe React utilisée pour les actualités
     CLASSE_NEWS = "_3OBoG7TZb8gxM8NbILzAan"
 
     def __init__(self):
@@ -149,12 +151,9 @@ class RecuperateurCS2:
         if self.playwright:
             self.playwright.stop()
 
-    # === Scraper mises à jour ===
     def recuperer_mise_a_jour(self, soup):
-        # 1) Essayer avec la classe React exacte
         articles = soup.find_all("div", class_=self.CLASSE_PATCH)
 
-        # 2) Fallback structurel
         if not articles:
             candidats = soup.select("div[id='csgo_react_root'] > div > div")
             articles = [c for c in candidats if c.find("p") and c.find("ul")]
@@ -165,27 +164,22 @@ class RecuperateurCS2:
 
         article = articles[0]
 
-        # --- Extraction du titre ---
         titre_tag = article.find("p")
         titre = titre_tag.get_text(strip=True) if titre_tag else "Mise à jour CS2"
 
-        # --- Extraction de la date ---
         date_tag = article.find("div")
         date_raw = date_tag.get_text(strip=True) if date_tag else "Date inconnue"
         date = traduire_date_anglaise(date_raw)
 
-        # --- Extraction du résumé ---
         bullet_points = article.find_all("li")
         resume = "\n".join(f"- {li.get_text(strip=True)}" for li in bullet_points)
         if not resume:
             resume = "Aucun résumé disponible."
 
-        # --- Lien (les patch notes n'ont pas de page dédiée) ---
         lien = "https://www.counter-strike.net/news/updates?l=french"
 
         return ArticleCS2(f"{titre} ({date})", resume, lien, "mise_a_jour")
 
-    # === Scraper actualités ===
     def recuperer_actualite(self, soup):
         articles = soup.find_all("a", class_=self.CLASSE_NEWS)
 
@@ -207,7 +201,6 @@ class RecuperateurCS2:
 
         return ArticleCS2(f"{titre} ({date})", resume, lien, "actualite")
 
-    # === Récupération générique ===
     def recuperer(self, url: str, categorie: str):
         self._demarrer()
 
