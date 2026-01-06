@@ -89,6 +89,12 @@ class NotifDiscord:
 class RecuperateurCS2:
     """Récupère les mises à jour et actualités CS2 via Playwright."""
 
+    # Classe React utilisée pour les mises à jour (patch notes)
+    CLASSE_PATCH = "-EouvmnKRMabN5fJonx-O"
+
+    # Classe React utilisée pour les actualités
+    CLASSE_NEWS = "_3OBoG7TZb8gxM8NbILzAan"
+
     def __init__(self):
         self.playwright = None
         self.browser = None
@@ -104,8 +110,57 @@ class RecuperateurCS2:
         if self.playwright:
             self.playwright.stop()
 
+    # === Scraper mises à jour ===
+    def recuperer_mise_a_jour(self, soup):
+        # 1) Essayer avec la classe React exacte
+        articles = soup.find_all("div", class_=self.CLASSE_PATCH)
+
+        # 2) Fallback structurel
+        if not articles:
+            candidats = soup.select("div[id='csgo_react_root'] > div > div")
+            articles = [c for c in candidats if c.find("p") and c.find("ul")]
+
+        if not articles:
+            print("[mise_a_jour] Aucun article trouvé.")
+            return None
+
+        article = articles[0]
+
+        titre_tag = article.find("p")
+        titre = titre_tag.get_text(strip=True) if titre_tag else "Titre inconnu"
+
+        date_tag = article.find("div")
+        date = date_tag.get_text(strip=True) if date_tag else "Date inconnue"
+
+        bullet_points = article.find_all("li")
+        resume = "\n".join(f"- {li.get_text(strip=True)}" for li in bullet_points)
+        if not resume:
+            resume = "Aucun résumé disponible."
+
+        return ArticleCS2(f"{titre} ({date})", resume, "", "mise_a_jour")
+
+    # === Scraper actualités ===
+    def recuperer_actualite(self, soup):
+        articles = soup.find_all("a", class_=self.CLASSE_NEWS)
+
+        if not articles:
+            print("[actualite] Aucun article trouvé.")
+            return None
+
+        article = articles[0]
+
+        bloc = article.find("div", class_="_2P4kNfcV-LQM4dxZG64G2y")
+
+        date = bloc.find("div", class_="_3kp_OxASIUMKf6oh0nhkFd").get_text(strip=True)
+        titre = bloc.find("div", class_="_39UGsnaF9LNfYmJDUwUkdr").get_text(strip=True)
+        resume = bloc.find("div", class_="_471NMqUJJK-cwlZPr1323").get_text(strip=True)
+
+        lien = "https://www.counter-strike.net" + article["href"]
+
+        return ArticleCS2(f"{titre} ({date})", resume, lien, "actualite")
+
+    # === Récupération générique ===
     def recuperer(self, url: str, categorie: str):
-        """Récupère le premier article d'une page CS2."""
         self._demarrer()
 
         for tentative in range(3):
@@ -122,25 +177,11 @@ class RecuperateurCS2:
 
                 soup = BeautifulSoup(html, "lxml")
 
-                articles = soup.select("div[id='csgo_react_root'] div[class*='article']")
-                if not articles:
-                    print(f"[{categorie}] Aucun article trouvé.")
-                    return None
+                if categorie == "mise_a_jour":
+                    return self.recuperer_mise_a_jour(soup)
 
-                article = articles[0]
-
-                titre_tag = article.find("p")
-                titre = titre_tag.get_text(strip=True) if titre_tag else "Titre inconnu"
-
-                date_tag = article.find("div")
-                date = date_tag.get_text(strip=True) if date_tag else "Date inconnue"
-
-                bullet_points = article.find_all("li")
-                resume = "\n".join(f"- {li.get_text(strip=True)}" for li in bullet_points)
-                if not resume:
-                    resume = "Aucun résumé disponible."
-
-                return ArticleCS2(f"{titre} ({date})", resume, url, categorie)
+                if categorie == "actualite":
+                    return self.recuperer_actualite(soup)
 
             except Exception as e:
                 print(f"[{categorie}] Erreur : {e}")
