@@ -57,6 +57,14 @@ class NotifDiscord:
         self.webhook_url = webhook_url
 
     def envoyer(self, article: ArticleCS2):
+        # Titre dynamique selon la catégorie
+        titre_embed = (
+            "📰 Nouvelle mise à jour CS2 !" 
+            if article.categorie == "mise_a_jour" 
+            else "📰 Nouvelle actualité CS2 !"
+        )
+
+        # Extraction du titre + date
         titre, date = article.titre.rsplit("(", 1)
         titre = titre.strip()
         date = date.strip(")")
@@ -66,11 +74,6 @@ class NotifDiscord:
 📝 **{titre}**
 
 {article.resume}"""
-        titre_embed = (
-    "📰 Nouvelle mise à jour CS2 !" 
-    if article.categorie == "mise_a_jour" 
-    else "📰 Nouvelle actualité CS2 !"
-)
 
         payload = {
             "embeds": [{
@@ -80,7 +83,7 @@ class NotifDiscord:
                 "color": 0x58A6FF
             }]
         }
-        
+
         print(f"📢 Envoi Discord : {article.titre}")
         resp = requests.post(self.webhook_url, json=payload, timeout=20)
 
@@ -131,18 +134,24 @@ class RecuperateurCS2:
 
         article = articles[0]
 
+        # --- Extraction du titre ---
         titre_tag = article.find("p")
-        titre = titre_tag.get_text(strip=True) if titre_tag else "Titre inconnu"
+        titre = titre_tag.get_text(strip=True) if titre_tag else "Mise à jour CS2"
 
+        # --- Extraction de la date ---
         date_tag = article.find("div")
         date = date_tag.get_text(strip=True) if date_tag else "Date inconnue"
 
+        # --- Extraction du résumé ---
         bullet_points = article.find_all("li")
         resume = "\n".join(f"- {li.get_text(strip=True)}" for li in bullet_points)
         if not resume:
             resume = "Aucun résumé disponible."
 
-        return ArticleCS2(f"{titre} ({date})", resume, "", "mise_a_jour")
+        # --- Lien (les patch notes n'ont pas de page dédiée) ---
+        lien = "https://www.counter-strike.net/news/updates?l=french"
+
+        return ArticleCS2(f"{titre} ({date})", resume, lien, "mise_a_jour")
 
     # === Scraper actualités ===
     def recuperer_actualite(self, soup):
@@ -173,7 +182,10 @@ class RecuperateurCS2:
                 print(f"[{categorie}] Tentative {tentative+1} sur {url}")
 
                 page = self.browser.new_page()
-                page.set_extra_http_headers({"User-Agent": "Mozilla/5.0"})
+                page.set_extra_http_headers({
+                    "User-Agent": "Mozilla/5.0",
+                    "Accept-Language": "fr-FR,fr;q=0.9"
+                })
                 page.goto(url, timeout=90000)
                 page.wait_for_selector("div[id='csgo_react_root']", timeout=30000)
 
@@ -183,7 +195,7 @@ class RecuperateurCS2:
                 soup = BeautifulSoup(html, "lxml")
 
                 if categorie == "mise_a_jour":
-                    return ArticleCS2( f"{titre} ({date})", resume, "https://www.counter-strike.net/news/updates?l=french", "mise_a_jour" )
+                    return self.recuperer_mise_a_jour(soup)
 
                 if categorie == "actualite":
                     return self.recuperer_actualite(soup)
